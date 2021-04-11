@@ -671,7 +671,17 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
                 media_filename = get_media_filename(ytid, ts_start, ts_end)
                 video_filepath = os.path.join(data_dir, 'video', media_filename + '.' + ffmpeg_cfg.get('video_format', 'mp4'))
                 audio_filepath = os.path.join(data_dir, 'audio', media_filename + '.' + ffmpeg_cfg.get('audio_format', 'flac'))
-                if os.path.exists(video_filepath) and os.path.exists(audio_filepath):
+
+                audio_only = not bool(ffmpeg_cfg.get('video_mode'))
+
+                output_exists = False
+                audio_exists = os.path.exists(audio_filepath)
+                if audio_only:
+                    output_exists = audio_exists
+                else:
+                    output_exists = audio_exists and os.path.exists(video_filepath)
+
+                if output_exists:
                     info_msg = 'Already downloaded video {} ({} - {}). Skipping.'
                     LOGGER.info(info_msg.format(ytid, ts_start, ts_end))
                     continue
