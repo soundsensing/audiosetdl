@@ -556,17 +556,24 @@ def segment_mp_worker(ytid, ts_start, ts_end, data_dir, ffmpeg_path,
     """
     LOGGER.info('Attempting to download video {} ({} - {})'.format(ytid, ts_start, ts_end))
 
-    # Download the video
-    try:
-        download_yt_video(ytid, ts_start, ts_end, data_dir, ffmpeg_path,
-                          ffprobe_path, **ffmpeg_cfg)
-    except SubprocessError as e:
-        err_msg = 'Error while downloading video {}: {}; {}'.format(ytid, e, tb.format_exc())
-        LOGGER.error(err_msg)
-    except Exception as e:
-        err_msg = 'Error while processing video {}: {}; {}'.format(ytid, e, tb.format_exc())
-        LOGGER.error(err_msg)
+    with open("failures.csv", "a") as failures:
+        
+        def log_failure(ytid, msg):
+            m = msg.replace('\n', '\\n').replace('\r' ,'\\r')
+            failures.write(f"{ytid},'{m}'\n")
 
+        # Download the video
+        try:
+            download_yt_video(ytid, ts_start, ts_end, data_dir, ffmpeg_path,
+                              ffprobe_path, **ffmpeg_cfg)
+        except SubprocessError as e:
+            err_msg = 'Error while downloading video {}: {}; {}'.format(ytid, e, tb.format_exc())
+            LOGGER.error(err_msg)
+            log_failure(ytid, str(e))
+        except Exception as e:
+            err_msg = 'Error while processing video {}: {}; {}'.format(ytid, e, tb.format_exc())
+            LOGGER.error(err_msg)
+            log_failure(ytid, str(e))
 
 def init_subset_data_dir(dataset_dir, subset_name):
     """
