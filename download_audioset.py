@@ -427,7 +427,7 @@ def download_yt_video(ytid, ts_start, ts_end, output_dir, ffmpeg_path, ffprobe_p
     audio_info = {
         'sample_rate': audio_sample_rate,
         'channels': 2,
-        'bitrate': audio_bit_depth,
+        #'bitrate': audio_bit_depth, # in recent sox this is not the bitdepth for FLAC
         'encoding': audio_codec.upper(),
         'duration': duration
     }
