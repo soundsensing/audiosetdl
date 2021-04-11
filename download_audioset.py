@@ -633,6 +633,17 @@ def download_subset_file(subset_url, dataset_dir):
     return subset_path
 
 
+def load_failures(path="failures.csv"):
+    import os.path
+    import pandas
+
+    if not os.path.exists(path):
+        return set()
+
+    df = pandas.read_csv(path, quotechar="'", names=['youtube_id', 'error'])
+    return set(df.youtube_id)
+
+
 def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
                            num_workers, **ffmpeg_cfg):
     """
@@ -660,6 +671,9 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
                        (Type: dict[str, *])
     """
     subset_name = get_subset_name(subset_path)
+
+    failed_ids = load_failures()
+    LOGGER.info('Loaded failures, {}'.format(len(failed_ids)))
 
     LOGGER.info('Starting download jobs for subset "{}"'.format(subset_name))
     with open(subset_path, 'r') as f:
@@ -690,6 +704,12 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
 
                 if output_exists:
                     info_msg = 'Already downloaded video {} ({} - {}). Skipping.'
+                    LOGGER.info(info_msg.format(ytid, ts_start, ts_end))
+                    continue
+
+                # Skip files that have failed before
+                if ytid in failed_ids:
+                    info_msg = 'Video failed previously {} ({} - {}). Skipping.'
                     LOGGER.info(info_msg.format(ytid, ts_start, ts_end))
                     continue
 
