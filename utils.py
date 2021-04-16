@@ -8,7 +8,7 @@ URL_PATTERN = re.compile(r'https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-
 HTTP_ERR_PATTERN = re.compile(r'Server returned (4|5)(X|[0-9])(X|[0-9])')
 
 
-def run_command(cmd, **kwargs):
+def run_command(cmd, timeout=None, **kwargs):
     """
     Run a command line command
 
@@ -29,7 +29,7 @@ def run_command(cmd, **kwargs):
                       (Type: int)
     """
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, **kwargs)
-    stdout, stderr = proc.communicate()
+    stdout, stderr = proc.communicate(timeout=timeout)
 
     return_code = proc.returncode
 
