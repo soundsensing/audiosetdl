@@ -17,7 +17,6 @@ import urllib.request
 from functools import partial
 
 import multiprocessing_logging
-import pafy
 
 from errors import SubprocessError, FfmpegValidationError, \
                    FfmpegIncorrectDurationError, FfmpegUnopenableFileError
@@ -317,6 +316,110 @@ def ffmpeg(ffmpeg_path, input_path, output_path, input_args=None,
         LOGGER.error(error_msg.format(num_retries, input_path, str(last_err)))
 
 
+
+def get_video_info(url):
+
+    import youtube_dl
+    #print(youtube_dl.__version__)
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'verbose': True,
+        'cookies': 'cookies.txt',
+        'print-traffic': True,
+    }
+    print(url)
+    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        result = ydl.extract_info(url, download=False)
+
+    if 'entries' in result:
+        # Can be a playlist or a list of videos
+        video = result['entries'][0]
+    else:
+        # Just a video
+        video = result
+
+    return video
+
+
+def get_video_info(url):
+
+    import youtube_dl
+
+    ydl_opts = {
+        #'format': 'bestaudio/best',
+        #'verbose': True,
+        #'cookies': 'cookies.txt',
+        #'print-traffic': True,
+    }
+    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        result = ydl.extract_info(url, download=False)
+
+    if 'entries' in result:
+        # Can be a playlist or a list of videos
+        video = result['entries'][0]
+    else:
+        # Just a video
+        video = result
+
+    return video
+
+def format_is_audio_only(format):
+    t = format['acodec'] != 'none' \
+        and format['vcodec'] == 'none' # no video present, audio only
+    return t
+
+def format_is_video_only(format):
+    t = format['acodec'] == 'none' \
+        and format['vcodec'] != 'none'
+    return t
+
+def format_is_video_with_audio(format):
+    t = format['acodec'] != 'none' \
+        and format['vcodec'] != 'none'
+    return t
+
+def sort_audio_formats(formats, by='abr'):
+    f = filter(format_is_audio_only, formats) 
+    s = sorted(f, key=lambda f: f[by], reverse=True)
+    return s
+
+def get_best_audio_format(formats):
+    s = sort_audio_formats(formats)
+    return s[0]
+
+
+# note: Not all formats have vbr?
+def sort_video_formats(formats, with_audio=True, by=('width', 'tbr')):
+    pred = format_is_video_with_audio if with_audio else format_is_video_only
+    f = filter(pred, formats)
+
+    def get_key(f):
+        key = tuple(f[k] for k in by)
+        return key
+
+    s = sorted(f, key=get_key, reverse=True)
+    return s
+
+
+def get_best_video_format(formats, video_mode, sort_by=('width', 'tbr')):
+    video_noaudio_formats = sort_video_formats(formats, with_audio=False, by=sort_by)
+    video_audio_formats = sort_video_formats(formats, with_audio=True, by=sort_by)
+
+    if video_mode == '':
+        return None
+
+    if video_mode in ('bestvideo', 'bestvideowithaudio'):
+        # If there isn't a video only option, go with best video with audio
+        if len(video_noaudio_formats):
+            return video_noaudio_formats[0]
+        else:
+            return video_audio_formats[0]
+    elif video_mode in ('bestvideoaudio', 'bestvideoaudionoaudio'):
+        return video_audio_formats[0]
+    else:
+        raise ValueError('Invalid video mode: {}'.format(video_mode))
+
 def download_yt_video(ytid, ts_start, ts_end, output_dir, ffmpeg_path, ffprobe_path,
                       audio_codec='flac', audio_format='flac',
                       audio_sample_rate=48000, audio_bit_depth=16,
@@ -408,8 +511,13 @@ def download_yt_video(ytid, ts_start, ts_end, output_dir, ffmpeg_path, ffprobe_p
 
     # Get the direct URLs to the videos with best audio and with best video (with audio)
 
-    video = pafy.new(video_page_url)
-    video_duration = video.length
+    url = f'https://www.youtube.com/watch?v={ytid}'
+    video = get_video_info(url)
+
+    video_url = video['url']
+    video_duration = video['duration']
+    print(video['id'], video_duration, video_url)
+
     end_past_video_end = False
     if ts_end > video_duration:
         warn_msg = "End time for segment ({} - {}) of video {} extends past end of video (length {} sec)"
@@ -418,17 +526,9 @@ def download_yt_video(ytid, ts_start, ts_end, output_dir, ffmpeg_path, ffprobe_p
         ts_end = ts_start + duration
         end_past_video_end = True
 
-    if video_mode in ('bestvideo', 'bestvideowithaudio', ''):
-        best_video = video.getbestvideo()
-        # If there isn't a video only option, go with best video with audio
-        if best_video is None:
-            best_video = video.getbest()
-    elif video_mode in ('bestvideoaudio', 'bestvideoaudionoaudio'):
-        best_video = video.getbest()
-    else:
-        raise ValueError('Invalid video mode: {}'.format(video_mode))
-    best_audio = video.getbestaudio()
-    best_video_url = best_video.url
+    best_video = get_best_video_format(video['formats'], video_mode=video_mode)
+    best_audio = get_best_audio_format(video['formats'])
+    best_video_url = best_video['url']
     best_audio_url = best_audio.url
 
     audio_info = {
