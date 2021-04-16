@@ -556,24 +556,21 @@ def segment_mp_worker(ytid, ts_start, ts_end, data_dir, ffmpeg_path,
     """
     LOGGER.info('Attempting to download video {} ({} - {})'.format(ytid, ts_start, ts_end))
 
-    with open("failures.csv", "a") as failures:
-        
-        def log_failure(ytid, msg):
-            m = msg.replace('\n', '\\n').replace('\r' ,'\\r')
-            failures.write(f"{ytid},'{m}'\n")
+    # Download the video
+    try:
+        download_yt_video(ytid, ts_start, ts_end, data_dir, ffmpeg_path,
+                          ffprobe_path, **ffmpeg_cfg)
+    except SubprocessError as e:
+        err_msg = 'Error while downloading video {}: {}; {}'.format(ytid, e, tb.format_exc())
+        LOGGER.error(err_msg)
+        return False
 
-        # Download the video
-        try:
-            download_yt_video(ytid, ts_start, ts_end, data_dir, ffmpeg_path,
-                              ffprobe_path, **ffmpeg_cfg)
-        except SubprocessError as e:
-            err_msg = 'Error while downloading video {}: {}; {}'.format(ytid, e, tb.format_exc())
-            LOGGER.error(err_msg)
-            log_failure(ytid, str(e))
-        except Exception as e:
-            err_msg = 'Error while processing video {}: {}; {}'.format(ytid, e, tb.format_exc())
-            LOGGER.error(err_msg)
-            log_failure(ytid, str(e))
+    except Exception as e:
+        err_msg = 'Error while processing video {}: {}; {}'.format(ytid, e, tb.format_exc())
+        LOGGER.error(err_msg)
+        return False
+
+    return True
 
 def init_subset_data_dir(dataset_dir, subset_name):
     """
@@ -644,6 +641,50 @@ def load_failures(path="failures.csv"):
     return set(df.youtube_id)
 
 
+def process_job(ytid, ts_start, ts_end, data_dir,
+        ffmpeg_path, ffprobe_path, ffmpeg_cfg, failed_ids):
+
+    # Skip files that already have been downloaded
+    media_filename = get_media_filename(ytid, ts_start, ts_end)
+    video_filepath = os.path.join(data_dir, 'video', media_filename + '.' + ffmpeg_cfg.get('video_format', 'mp4'))
+    audio_filepath = os.path.join(data_dir, 'audio', media_filename + '.' + ffmpeg_cfg.get('audio_format', 'flac'))
+
+    audio_only = not bool(ffmpeg_cfg.get('video_mode'))
+
+    output_exists = False
+    audio_exists = os.path.exists(audio_filepath)
+    if audio_only:
+        output_exists = audio_exists
+    else:
+        output_exists = audio_exists and os.path.exists(video_filepath)
+
+    if output_exists:
+        info_msg = 'Already downloaded video {} ({} - {}). Skipping.'
+        LOGGER.info(info_msg.format(ytid, ts_start, ts_end))
+        return
+
+    # Skip files that have failed before
+    if ytid in failed_ids:
+        info_msg = 'Video failed previously {} ({} - {}). Skipping.'
+        LOGGER.info(info_msg.format(ytid, ts_start, ts_end))
+        return
+
+    # FIXME: bring back incremental tracking of failures
+
+    #with open("failures.csv", "a") as failures:   
+    #    def log_failure(ytid, msg):
+    #        m = msg.replace('\n', '\\n').replace('\r' ,'\\r')
+    #        failures.write(f"{ytid},'{m}'\n")
+
+    success = segment_mp_worker(ytid, ts_start, ts_end, data_dir, ffmpeg_path,
+                      ffprobe_path, **ffmpeg_cfg)
+
+    if success:
+        return ytid
+    else:
+        return None
+
+
 def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
                            num_workers, **ffmpeg_cfg):
     """
@@ -676,62 +717,36 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
     LOGGER.info('Loaded failures, {}'.format(len(failed_ids)))
 
     LOGGER.info('Starting download jobs for subset "{}"'.format(subset_name))
-    with open(subset_path, 'r') as f:
-        subset_data = csv.reader(f)
 
-        # Set up multiprocessing pool
-        pool = mp.Pool(num_workers)
+    import joblib
+
+    def setup_jobs(data):
+        jobs = []
+
         try:
-            for row_idx, row in enumerate(subset_data):
+            for row_idx, row in enumerate(data):
                 # Skip commented lines
                 if row[0][0] == '#':
                     continue
                 ytid, ts_start, ts_end = row[0], float(row[1]), float(row[2])
-
-                # Skip files that already have been downloaded
-                media_filename = get_media_filename(ytid, ts_start, ts_end)
-                video_filepath = os.path.join(data_dir, 'video', media_filename + '.' + ffmpeg_cfg.get('video_format', 'mp4'))
-                audio_filepath = os.path.join(data_dir, 'audio', media_filename + '.' + ffmpeg_cfg.get('audio_format', 'flac'))
-
-                audio_only = not bool(ffmpeg_cfg.get('video_mode'))
-
-                output_exists = False
-                audio_exists = os.path.exists(audio_filepath)
-                if audio_only:
-                    output_exists = audio_exists
-                else:
-                    output_exists = audio_exists and os.path.exists(video_filepath)
-
-                if output_exists:
-                    info_msg = 'Already downloaded video {} ({} - {}). Skipping.'
-                    LOGGER.info(info_msg.format(ytid, ts_start, ts_end))
-                    continue
-
-                # Skip files that have failed before
-                if ytid in failed_ids:
-                    info_msg = 'Video failed previously {} ({} - {}). Skipping.'
-                    LOGGER.info(info_msg.format(ytid, ts_start, ts_end))
-                    continue
-
-                worker_args = [ytid, ts_start, ts_end, data_dir, ffmpeg_path, ffprobe_path]
-                pool.apply_async(partial(segment_mp_worker, **ffmpeg_cfg), worker_args)
-                # Run serially
-                #segment_mp_worker(*worker_args, **ffmpeg_cfg)
-
+                worker_args = [ytid, ts_start, ts_end, data_dir, ffmpeg_path, ffprobe_path, ffmpeg_cfg, failed_ids]
+            
+                job = joblib.delayed(process_job)(*worker_args)
+                jobs += [ job ]
         except csv.Error as e:
-            err_msg = 'Encountered error in {} at line {}: {}'
-            LOGGER.error(err_msg)
-            sys.exit(err_msg.format(subset_path, row_idx+1, e))
-        except KeyboardInterrupt:
-            LOGGER.info("Forcing exit.")
-            exit()
-        finally:
-            try:
-                pool.close()
-                pool.join()
-            except KeyboardInterrupt:
-                LOGGER.info("Forcing exit.")
-                exit()
+            LOGGER.error(f'CSV error in {subset_path} at line {row_idx}: {e}')
+
+        return jobs
+
+    # Prepare jobs
+    jobs = []
+    with open(subset_path, 'r') as f:
+        subset_data = csv.reader(f)
+        jobs = setup_jobs(subset_data)
+
+    # Execute jobs
+    print(len(jobs), jobs[0])
+    results = joblib.Parallel(n_jobs=num_workers)(jobs)
 
     LOGGER.info('Finished download jobs for subset "{}"'.format(subset_name))
 
