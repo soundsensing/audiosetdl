@@ -316,32 +316,6 @@ def ffmpeg(ffmpeg_path, input_path, output_path, input_args=None,
         LOGGER.error(error_msg.format(num_retries, input_path, str(last_err)))
 
 
-
-def get_video_info(url):
-
-    import youtube_dl
-    #print(youtube_dl.__version__)
-
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'verbose': True,
-        'cookies': 'cookies.txt',
-        'print-traffic': True,
-    }
-    print(url)
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        result = ydl.extract_info(url, download=False)
-
-    if 'entries' in result:
-        # Can be a playlist or a list of videos
-        video = result['entries'][0]
-    else:
-        # Just a video
-        video = result
-
-    return video
-
-
 def get_video_info(url):
 
     import youtube_dl
@@ -351,6 +325,7 @@ def get_video_info(url):
         #'verbose': True,
         #'cookies': 'cookies.txt',
         #'print-traffic': True,
+        'youtube_include_dash_manifest': False,
     }
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         result = ydl.extract_info(url, download=False)
