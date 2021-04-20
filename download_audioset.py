@@ -837,7 +837,7 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
     failed_ids = load_failures()
     LOGGER.info('Loaded failures, {}'.format(len(failed_ids)))
 
-    LOGGER.info('Starting download jobs for subset "{}"'.format(subset_name))
+    LOGGER.info('Preparing jobs for subset "{}"'.format(subset_name))
 
     import joblib
 
@@ -865,8 +865,10 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
         subset_data = csv.reader(f)
         jobs = setup_jobs(subset_data)
 
+    LOGGER.info('Starting download jobs for subset "{}"'.format(subset_name))
+
     # Execute jobs
-    print(len(jobs), jobs[0])
+    #print(len(jobs), jobs[0])
     results = joblib.Parallel(n_jobs=num_workers)(jobs)
 
     LOGGER.info('Finished download jobs for subset "{}"'.format(subset_name))
