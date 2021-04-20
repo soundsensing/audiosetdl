@@ -51,3 +51,29 @@ def test_get_best_video():
     assert best['width'] == expected_best_width
     assert best['tbr'] == expected_best_bitrate_video_only
 
+def test_avoid_dash():
+    p = os.path.join(here, 'data/C8eNougQyaI.info.json')
+    info = read_json_file(p)
+
+    for f in info['formats']:
+        print(f.get('width'), f.get('vbr'), f.get('tbr'))
+
+    expected_best_width = 480
+
+    # with audio
+    best = audiosetdl.get_best_video_format(info["formats"], video_mode='bestvideoaudio')
+    print(best)
+
+    assert best['width'] == expected_best_width
+    assert best['protocol'] == 'https'
+
+    # without audio
+    best = audiosetdl.get_best_video_format(info["formats"], video_mode='bestvideo')
+    print(best)
+
+    assert best['protocol'] == 'https'
+    assert best['width'] == 640
+
+
+
+

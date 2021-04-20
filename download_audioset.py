@@ -384,7 +384,14 @@ def sort_audio_formats(formats, by='abr'):
     s = sorted(f, key=lambda f: f.get(by, 0), reverse=True)
     return s
 
+def format_is_not_dash(format):
+    return format['protocol'] != 'http_dash_segments'
+
+def filter_formats(formats):
+    return list(filter(format_is_not_dash, formats))
+
 def get_best_audio_format(formats):
+    formats = filter_formats(formats)
     s = sort_audio_formats(formats)
     return s[0]
 
@@ -403,6 +410,7 @@ def sort_video_formats(formats, with_audio=True, by=('width', 'tbr')):
 
 
 def get_best_video_format(formats, video_mode, sort_by=('width', 'tbr')):
+    formats = filter_formats(formats)
     video_noaudio_formats = sort_video_formats(formats, with_audio=False, by=sort_by)
     video_audio_formats = sort_video_formats(formats, with_audio=True, by=sort_by)
 
