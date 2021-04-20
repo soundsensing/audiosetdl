@@ -762,15 +762,12 @@ def load_failures(path="failures.csv"):
     return set(df.youtube_id)
 
 
-def process_job(ytid, ts_start, ts_end, data_dir,
-        ffmpeg_path, ffprobe_path, ffmpeg_cfg, failed_ids):
+def check_output_exists(data_dir, ytid, ts_start, ts_end, audio_only=False, video_format='mp4', audio_format='flac'):
 
     # Skip files that already have been downloaded
     media_filename = get_media_filename(ytid, ts_start, ts_end)
-    video_filepath = os.path.join(data_dir, 'video', media_filename + '.' + ffmpeg_cfg.get('video_format', 'mp4'))
-    audio_filepath = os.path.join(data_dir, 'audio', media_filename + '.' + ffmpeg_cfg.get('audio_format', 'flac'))
-
-    audio_only = not bool(ffmpeg_cfg.get('video_mode'))
+    video_filepath = os.path.join(data_dir, 'video', media_filename + '.' + video_format)
+    audio_filepath = os.path.join(data_dir, 'audio', media_filename + '.' + audio_format)
 
     output_exists = False
     audio_exists = os.path.exists(audio_filepath)
@@ -779,6 +776,13 @@ def process_job(ytid, ts_start, ts_end, data_dir,
     else:
         output_exists = audio_exists and os.path.exists(video_filepath)
 
+    return output_exists
+
+def process_job(ytid, ts_start, ts_end, data_dir,
+        ffmpeg_path, ffprobe_path, ffmpeg_cfg, failed_ids):
+
+    audio_only = not bool(ffmpeg_cfg.get('video_mode'))
+    output_exists = check_output_exists(data_dir, ytid, ts_start, ts_end, audio_only=audio_only)
     if output_exists:
         info_msg = 'Already downloaded video {} ({} - {}). Skipping.'
         LOGGER.info(info_msg.format(ytid, ts_start, ts_end))
@@ -850,7 +854,17 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
                 if row[0][0] == '#':
                     continue
                 ytid, ts_start, ts_end = row[0], float(row[1]), float(row[2])
-                worker_args = [ytid, ts_start, ts_end, data_dir, ffmpeg_path, ffprobe_path, ffmpeg_cfg, failed_ids]
+
+                audio_only = not bool(ffmpeg_cfg.get('video_mode'))
+                output_exists = check_output_exists(data_dir, ytid, ts_start, ts_end, audio_only=audio_only)
+                if output_exists:
+                    continue
+
+                if ytid in failed_ids:
+                    continue
+
+                worker_args = [ytid, ts_start, ts_end,
+                    data_dir, ffmpeg_path, ffprobe_path, ffmpeg_cfg, failed_ids]
             
                 job = joblib.delayed(process_job)(*worker_args)
                 jobs += [ job ]
@@ -865,7 +879,7 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
         subset_data = csv.reader(f)
         jobs = setup_jobs(subset_data)
 
-    LOGGER.info('Starting download jobs for subset "{}"'.format(subset_name))
+    LOGGER.info('Starting {} download jobs for subset "{}"'.format(len(jobs), subset_name))
 
     # Execute jobs
     #print(len(jobs), jobs[0])
