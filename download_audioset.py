@@ -355,7 +355,7 @@ def get_video_info(url):
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         result = ydl.extract_info(url, download=False)
 
-    if 'entries' in result:
+    if 'entries' in result and len(result["entries"]):
         # Can be a playlist or a list of videos
         video = result['entries'][0]
     else:
