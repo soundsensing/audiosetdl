@@ -381,7 +381,7 @@ def format_is_video_with_audio(format):
 
 def sort_audio_formats(formats, by='abr'):
     f = filter(format_is_audio_only, formats) 
-    s = sorted(f, key=lambda f: f[by], reverse=True)
+    s = sorted(f, key=lambda f: f.get(by, 0), reverse=True)
     return s
 
 def get_best_audio_format(formats):
