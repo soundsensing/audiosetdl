@@ -393,7 +393,10 @@ def filter_formats(formats):
 def get_best_audio_format(formats):
     formats = filter_formats(formats)
     s = sort_audio_formats(formats)
-    return s[0]
+    if len(s):
+        return s[0]
+    else:
+        return None
 
 
 # note: Not all formats have vbr?
@@ -540,7 +543,7 @@ def download_yt_video(ytid, ts_start, ts_end, output_dir, ffmpeg_path, ffprobe_p
     best_video = get_best_video_format(video['formats'], video_mode=video_mode)
     best_audio = get_best_audio_format(video['formats'])
     best_video_url = best_video['url'] if best_video else None  
-    best_audio_url = best_audio['url'] if best_audio else None
+    best_audio_url = best_audio['url'] if best_audio else best_video['url']
 
     audio_info = {
         'sample_rate': audio_sample_rate,

@@ -55,25 +55,26 @@ def test_avoid_dash():
     p = os.path.join(here, 'data/C8eNougQyaI.info.json')
     info = read_json_file(p)
 
-    for f in info['formats']:
-        print(f.get('width'), f.get('vbr'), f.get('tbr'))
-
     expected_best_width = 480
 
     # with audio
     best = audiosetdl.get_best_video_format(info["formats"], video_mode='bestvideoaudio')
-    print(best)
 
     assert best['width'] == expected_best_width
     assert best['protocol'] == 'https'
 
     # without audio
     best = audiosetdl.get_best_video_format(info["formats"], video_mode='bestvideo')
-    print(best)
 
     assert best['protocol'] == 'https'
     assert best['width'] == 640
 
+def test_fallback_noaudioonly():
+    p = os.path.join(here, 'data/9NbwiIjvWX8.info.json')
 
+    info = read_json_file(p)
+
+    best = audiosetdl.get_best_audio_format(info["formats"])
+    assert best is None
 
 
