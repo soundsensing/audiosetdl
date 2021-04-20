@@ -514,9 +514,12 @@ def download_yt_video(ytid, ts_start, ts_end, output_dir, ffmpeg_path, ffprobe_p
     url = f'https://www.youtube.com/watch?v={ytid}'
     video = get_video_info(url)
 
-    video_url = video['url']
+    #video_url = video.get('url')
+    #if not video_url:
+    #    print(video)
+    #    raise ValueError("No URL??")
     video_duration = video['duration']
-    print(video['id'], video_duration, video_url)
+    print(video['id'], video_duration)
 
     end_past_video_end = False
     if ts_end > video_duration:
@@ -528,8 +531,8 @@ def download_yt_video(ytid, ts_start, ts_end, output_dir, ffmpeg_path, ffprobe_p
 
     best_video = get_best_video_format(video['formats'], video_mode=video_mode)
     best_audio = get_best_audio_format(video['formats'])
-    best_video_url = best_video['url']
-    best_audio_url = best_audio.url
+    best_video_url = best_video['url'] if best_video else None  
+    best_audio_url = best_audio['url'] if best_audio else None
 
     audio_info = {
         'sample_rate': audio_sample_rate,
