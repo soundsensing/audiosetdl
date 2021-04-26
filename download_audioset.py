@@ -823,8 +823,11 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
 
     import joblib
 
+
     def setup_jobs(data):
         jobs = []
+
+        remaining = []
 
         try:
             for row_idx, row in enumerate(data):
@@ -844,10 +847,14 @@ def download_subset_videos(subset_path, data_dir, ffmpeg_path, ffprobe_path,
                 worker_args = [ytid, ts_start, ts_end,
                     data_dir, ffmpeg_path, ffprobe_path, ffmpeg_cfg, failed_ids]
             
+                remaining.append((ytid, ts_start, ts_end))
                 job = joblib.delayed(process_job)(*worker_args)
                 jobs += [ job ]
         except csv.Error as e:
             LOGGER.error(f'CSV error in {subset_path} at line {row_idx}: {e}')
+
+        df = pandas.DataFrame.from_records(remaining)
+        df.to_csv("remaining.csv", index=False, header=False)
 
         return jobs
 
